@@ -9,7 +9,11 @@
 body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 24px; }
 .container { max-width: 900px; margin: 0 auto; }
 h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 6px; background: linear-gradient(135deg, #7c3aed, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.subtitle { color: #94a3b8; margin-bottom: 28px; font-size: 0.95rem; }
+.subtitle { color: #94a3b8; margin-bottom: 6px; font-size: 0.95rem; }
+.engine-badge { display: inline-flex; align-items: center; gap: 6px; background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 3px 12px; font-size: 0.75rem; color: #94a3b8; margin-bottom: 20px; }
+.engine-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+.engine-badge .dot.active { background: #22c55e; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 .drop-zone { border: 2px dashed #334155; border-radius: 16px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s; background: #1e293b; margin-bottom: 20px; }
 .drop-zone:hover, .drop-zone.dragover { border-color: #7c3aed; background: #1e1b4b; }
 .drop-zone p { color: #94a3b8; font-size: 0.95rem; }
@@ -17,6 +21,7 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 6px; background: linear
 input[type="file"] { display: none; }
 .badge-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
 .badge { background: #0f172a; border: 1px solid #334155; border-radius: 20px; padding: 4px 12px; font-size: 0.78rem; color: #94a3b8; }
+.badge.new { border-color: #7c3aed; color: #c4b5fd; }
 .options-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
 .options-bar label { font-size: 0.85rem; color: #94a3b8; }
 .options-bar select { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; padding: 6px 12px; font-size: 0.85rem; cursor: pointer; }
@@ -32,6 +37,7 @@ input[type="file"] { display: none; }
 .file-item .info { flex: 1; }
 .file-item .name { font-size: 0.9rem; font-weight: 500; }
 .file-item .size { font-size: 0.78rem; color: #64748b; }
+.file-item .eng { font-size: 0.7rem; color: #7c3aed; margin-top: 2px; }
 .file-item .status { font-size: 0.78rem; padding: 3px 10px; border-radius: 12px; }
 .status-waiting { background: #1e3a5f; color: #60a5fa; }
 .status-processing { background: #2d1b69; color: #a78bfa; }
@@ -59,9 +65,10 @@ textarea:focus { border-color: #7c3aed; }
 <body>
 <div class="container">
   <h1>多格式 → AI 可讀格式</h1>
-  <p class="subtitle">將 PDF、Word、Excel、CSV 一鍵轉換為 Markdown / JSON，讓 AI 更容易理解</p>
+  <p class="subtitle">將 PDF、Word、Excel、CSV、PPTX 一鍵轉換為 Markdown / JSON，讓 AI 更容易理解</p>
+  <div class="engine-badge" id="engineBadge"><div class="dot" id="engineDot"></div><span id="engineLabel">檢測引擎中...</span></div>
   <div class="drop-zone" id="dropZone">
-    <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#7c3aed"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+    <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#7c3aed" style="margin-bottom:12px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
     <p>拖曳檔案到此，或 <strong>點擊選擇檔案</strong></p>
     <p style="font-size:0.8rem;margin-top:6px;">支援同時上傳多個檔案</p>
     <div class="badge-row">
@@ -69,9 +76,10 @@ textarea:focus { border-color: #7c3aed; }
       <span class="badge">📝 Word (.docx)</span>
       <span class="badge">📊 Excel (.xlsx/.xls)</span>
       <span class="badge">📋 CSV</span>
+      <span class="badge new">📁 PowerPoint (.pptx)</span>
       <span class="badge">📃 TXT</span>
     </div>
-    <input type="file" id="fileInput" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.txt">
+    <input type="file" id="fileInput" multiple accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.pptx">
   </div>
   <div class="options-bar">
     <label>輸出格式：</label>
@@ -104,121 +112,141 @@ textarea:focus { border-color: #7c3aed; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-let files=[];
-const dropZone=document.getElementById("dropZone");
-const fileInput=document.getElementById("fileInput");
-dropZone.addEventListener("click",()=>fileInput.click());
-dropZone.addEventListener("dragover",e=>{e.preventDefault();dropZone.classList.add("dragover");});
-dropZone.addEventListener("dragleave",()=>dropZone.classList.remove("dragover"));
-dropZone.addEventListener("drop",e=>{e.preventDefault();dropZone.classList.remove("dragover");addFiles([...e.dataTransfer.files]);});
-fileInput.addEventListener("change",()=>addFiles([...fileInput.files]));
-function addFiles(n){n.forEach(f=>{if(!files.find(x=>x.name===f.name&&x.size===f.size))files.push(f);});renderFileList();document.getElementById("convertBtn").disabled=files.length===0;}
-function getIcon(n){return{pdf:"📄",docx:"📝",xlsx:"📊",xls:"📊",csv:"📋",txt:"📃"}[n.split(".").pop().toLowerCase()]||"📁";}
-function formatSize(b){if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFixed(1)+" KB";return(b/1048576).toFixed(1)+" MB";}
-function renderFileList(){
-  const l=document.getElementById("fileList");
-  if(!files.length){l.innerHTML="";return;}
-  l.innerHTML=files.map((f,i)=>"<div class=\"file-item\" id=\"file-"+i+"\"><div class=\"icon\">"+getIcon(f.name)+"</div><div class=\"info\"><div class=\"name\">"+f.name+"</div><div class=\"size\">"+formatSize(f.size)+"</div><div class=\"progress-bar\"><div class=\"progress-fill\" id=\"prog-"+i+"\" style=\"width:0%\"></div></div></div><div class=\"status status-waiting\" id=\"status-"+i+"\">\u7b49\u5f85\u4e2d</div><button style=\"background:none;border:none;color:#64748b;cursor:pointer;font-size:1.1rem;\" onclick=\"removeFile("+i+")\">\u2715</button></div>").join("");
-}
-function removeFile(i){files.splice(i,1);renderFileList();document.getElementById("convertBtn").disabled=files.length===0;}
-function clearAll(){files=[];renderFileList();document.getElementById("outputSection").classList.remove("visible");document.getElementById("outputArea").value="";document.getElementById("convertBtn").disabled=true;fileInput.value="";}
-function setStatus(i,t,s){const e=document.getElementById("status-"+i);if(e){e.className="status status-"+t;e.textContent=s;}}
-function setProgress(i,p){const e=document.getElementById("prog-"+i);if(e)e.style.width=p+"%";}
-function updateStats(t,n){document.getElementById("charCount").textContent=t.length.toLocaleString();document.getElementById("tokenCount").textContent=Math.round(t.length/3.5).toLocaleString();document.getElementById("fileCount").textContent=n;}
-function showToast(m,t){const e=document.getElementById("toast");e.textContent=m;e.className="toast "+(t||"")+" show";setTimeout(()=>e.classList.remove("show"),2800);}
-async function copyOutput(){const t=document.getElementById("outputArea").value;if(!t)return;await navigator.clipboard.writeText(t);const b=document.getElementById("copyBtn");b.textContent="\u2713 \u5df2\u8907\u88fd";b.classList.add("copied");setTimeout(()=>{b.textContent="\u8907\u88fd\u5168\u90e8";b.classList.remove("copied");},2000);}
-async function parsePDF(file,idx){
-  const ab=await file.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:ab}).promise;
-  const n=pdf.numPages;
-  let t="# "+file.name+"\n\n> \u5171 "+n+" \u9801\n\n";
-  for(let p=1;p<=n;p++){
-    setProgress(idx,30+Math.floor(p/n*60));
-    const pg=await pdf.getPage(p);
-    const c=await pg.getTextContent();
-    let s="",ly=null;
-    c.items.forEach(i=>{if(ly!==null&&Math.abs(i.transform[5]-ly)>5)s+="\n";s+=i.str;ly=i.transform[5];});
-    t+="## \u7b2c "+p+" \u9801\n\n"+s.trim()+"\n\n";
+
+// 引擎狀態
+let backendAvailable = null;
+let files = [];
+
+// 啟動時偵測後端
+(async function detectBackend() {
+  try {
+    const r = await fetch("/api/convert", { method: "OPTIONS" });
+    backendAvailable = r.ok || r.status === 200;
+  } catch {
+    backendAvailable = false;
   }
-  return t;
+  const dot = document.getElementById("engineDot");
+  const label = document.getElementById("engineLabel");
+  if (backendAvailable) {
+    dot.classList.add("active");
+    label.textContent = "MarkItDown 引擎就緒";
+  } else {
+    label.textContent = "JS 引擎（本地）";
+  }
+})();
+
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => { e.preventDefault(); dropZone.classList.remove("dragover"); addFiles([...e.dataTransfer.files]); });
+fileInput.addEventListener("change", () => addFiles([...fileInput.files]));
+
+function addFiles(n) { n.forEach(f => { if (!files.find(x => x.name===f.name && x.size===f.size)) files.push(f); }); renderFileList(); document.getElementById("convertBtn").disabled = files.length === 0; }
+function getIcon(n) { return {pdf:"📄",docx:"📝",xlsx:"📊",xls:"📊",csv:"📋",txt:"📃",pptx:"📁"}[n.split(".").pop().toLowerCase()] || "📁"; }
+function formatSize(b) { if(b<1024) return b+" B"; if(b<1048576) return (b/1024).toFixed(1)+" KB"; return (b/1048576).toFixed(1)+" MB"; }
+function renderFileList() {
+  const l = document.getElementById("fileList");
+  if (!files.length) { l.innerHTML = ""; return; }
+  l.innerHTML = files.map((f,i) => "<div class=\"file-item\" id=\"file-"+i+"\"><div class=\"icon\">"+getIcon(f.name)+"</div><div class=\"info\"><div class=\"name\">"+f.name+"</div><div class=\"size\">"+formatSize(f.size)+"</div><div class=\"eng\" id=\"eng-"+i+"\"></div><div class=\"progress-bar\"><div class=\"progress-fill\" id=\"prog-"+i+"\" style=\"width:0%\"></div></div></div><div class=\"status status-waiting\" id=\"status-"+i+"\">\u7b49\u5f85\u4e2d</div><button style=\"background:none;border:none;color:#64748b;cursor:pointer;font-size:1.1rem;\" onclick=\"removeFile("+i+")\">\u2715</button></div>").join("");
 }
-async function parseWord(file,idx){
-  const ab=await file.arrayBuffer();
-  setProgress(idx,50);
-  const r=await mammoth.convertToMarkdown({arrayBuffer:ab});
-  setProgress(idx,90);
-  let m="# "+file.name+"\n\n"+r.value;
-  if(r.messages.length)m+="\n\n---\n> \u26a0\ufe0f "+r.messages.map(x=>x.message).join("\uff1b");
-  return m;
+function removeFile(i) { files.splice(i,1); renderFileList(); document.getElementById("convertBtn").disabled = files.length===0; }
+function clearAll() { files=[]; renderFileList(); document.getElementById("outputSection").classList.remove("visible"); document.getElementById("outputArea").value=""; document.getElementById("convertBtn").disabled=true; fileInput.value=""; }
+function setStatus(i,t,s) { const e=document.getElementById("status-"+i); if(e){e.className="status status-"+t;e.textContent=s;} }
+function setProgress(i,p) { const e=document.getElementById("prog-"+i); if(e)e.style.width=p+"%"; }
+function setEng(i,s) { const e=document.getElementById("eng-"+i); if(e)e.textContent=s; }
+function updateStats(t,n) { document.getElementById("charCount").textContent=t.length.toLocaleString(); document.getElementById("tokenCount").textContent=Math.round(t.length/3.5).toLocaleString(); document.getElementById("fileCount").textContent=n; }
+function showToast(m,t) { const e=document.getElementById("toast"); e.textContent=m; e.className="toast "+(t||"")+" show"; setTimeout(()=>e.classList.remove("show"),2800); }
+
+// 主轉換函式：優先嘗試 MarkItDown 後端，失敗降級到 JS
+async function convertFile(file, idx) {
+  const ext = file.name.split(".").pop().toLowerCase();
+  setProgress(idx, 10);
+  // PPTX 只能由後端處理
+  if (ext === "pptx") {
+    if (!backendAvailable) { throw new Error("PPTX 需要 MarkItDown 引擎，目前後端不可用"); }
+    return await convertViaBackend(file, idx);
+  }
+  // 其他格式：商試後端，失敗則降級
+  if (backendAvailable) {
+    try {
+      return await convertViaBackend(file, idx);
+    } catch (e) {
+      setEng(idx, "後端失敗，降級到 JS...");
+    }
+  }
+  return await convertViaJS(file, idx);
 }
-async function parseExcel(file,idx){
-  const ab=await file.arrayBuffer();
-  setProgress(idx,40);
-  const wb=XLSX.read(ab,{type:"array"});
-  let o="# "+file.name+"\n\n";
-  wb.SheetNames.forEach((sn,si)=>{
-    setProgress(idx,40+Math.floor(si/wb.SheetNames.length*50));
-    const s=wb.Sheets[sn];
-    const d=XLSX.utils.sheet_to_json(s,{header:1,defval:""});
-    if(!d.length)return;
-    o+="## \u5de5\u4f5c\u8868\uff1a"+sn+"\n\n";
-    const h=d[0];
-    const w=h.map((x,ci)=>Math.max(String(x).length,...d.slice(1).map(r=>String(r[ci]??"").length),3));
-    o+="| "+h.map((x,i)=>String(x).padEnd(w[i])).join(" | ")+" |\n";
-    o+="| "+w.map(x=>"-".repeat(x)).join(" | ")+" |\n";
-    d.slice(1).forEach(r=>{o+="| "+h.map((_,i)=>String(r[i]??"").padEnd(w[i])).join(" | ")+" |\n";});
-    o+="\n> \u5171 "+(d.length-1)+" \u5217\u8cc7\u6599\n\n";
-  });
-  return o;
+
+async function convertViaBackend(file, idx) {
+  setEng(idx, "✨ MarkItDown 處理中...");
+  const form = new FormData();
+  form.append("file", file);
+  setProgress(idx, 30);
+  const res = await fetch("/api/convert", { method: "POST", body: form });
+  setProgress(idx, 80);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({error: res.statusText}));
+    throw new Error(err.error || res.statusText);
+  }
+  const data = await res.json();
+  setEng(idx, "✨ MarkItDown");
+  setProgress(idx, 100);
+  return "# " + data.filename + "\n\n" + data.content;
 }
-async function parseCSV(file){
-  const t=await file.text();
-  const ls=t.trim().split("\n").map(l=>l.split(",").map(c=>c.trim().replace(/^"|"$/g,"")));
-  if(!ls.length)return"";
-  let o="# "+file.name+"\n\n";
-  const h=ls[0];
-  const w=h.map((x,ci)=>Math.max(String(x).length,...ls.slice(1).map(r=>String(r[ci]??"").length),3));
-  o+="| "+h.map((x,i)=>String(x).padEnd(w[i])).join(" | ")+" |\n";
-  o+="| "+w.map(x=>"-".repeat(x)).join(" | ")+" |\n";
-  ls.slice(1).forEach(r=>{o+="| "+h.map((_,i)=>String(r[i]??"").padEnd(w[i])).join(" | ")+" |\n";});
-  o+="\n> \u5171 "+(ls.length-1)+" \u7b46\u8cc7\u6599\n\n";
-  return o;
+
+async function convertViaJS(file, idx) {
+  setEng(idx, "🔧 JS 引擎");
+  const ext = file.name.split(".").pop().toLowerCase();
+  setProgress(idx, 30);
+  if (ext==="pdf") return parsePDF(file, idx);
+  if (ext==="docx") return parseWord(file, idx);
+  if (ext==="xlsx"||ext==="xls") return parseExcel(file, idx);
+  if (ext==="csv") return parseCSV(file);
+  if (ext==="txt") return parseTXT(file);
+  throw new Error("不支援的格式: ." + ext);
 }
+
+async function parsePDF(file,idx){const ab=await file.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:ab}).promise;const n=pdf.numPages;let t="# "+file.name+"\n\n> \u5171 "+n+" \u9801\n\n";for(let p=1;p<=n;p++){setProgress(idx,30+Math.floor(p/n*60));const pg=await pdf.getPage(p);const c=await pg.getTextContent();let s="",ly=null;c.items.forEach(i=>{if(ly!==null&&Math.abs(i.transform[5]-ly)>5)s+="\n";s+=i.str;ly=i.transform[5];});t+="## \u7b2c "+p+" \u9801\n\n"+s.trim()+"\n\n";}return t;}
+async function parseWord(file,idx){const ab=await file.arrayBuffer();setProgress(idx,50);const r=await mammoth.convertToMarkdown({arrayBuffer:ab});setProgress(idx,90);let m="# "+file.name+"\n\n"+r.value;if(r.messages.length)m+="\n\n---\n> \u26a0\ufe0f "+r.messages.map(x=>x.message).join("\uff1b");return m;}
+async function parseExcel(file,idx){const ab=await file.arrayBuffer();setProgress(idx,40);const wb=XLSX.read(ab,{type:"array"});let o="# "+file.name+"\n\n";wb.SheetNames.forEach((sn,si)=>{setProgress(idx,40+Math.floor(si/wb.SheetNames.length*50));const s=wb.Sheets[sn];const d=XLSX.utils.sheet_to_json(s,{header:1,defval:""});if(!d.length)return;o+="## \u5de5\u4f5c\u8868\uff1a"+sn+"\n\n";const h=d[0];const w=h.map((x,ci)=>Math.max(String(x).length,...d.slice(1).map(r=>String(r[ci]??"").length),3));o+="| "+h.map((x,i)=>String(x).padEnd(w[i])).join(" | ")+" |\n";o+="| "+w.map(x=>"-".repeat(x)).join(" | ")+" |\n";d.slice(1).forEach(r=>{o+="| "+h.map((_,i)=>String(r[i]??"").padEnd(w[i])).join(" | ")+" |\n";});o+="\n> \u5171 "+(d.length-1)+" \u5217\u8cc7\u6599\n\n";});return o;}
+async function parseCSV(file){const t=await file.text();const ls=t.trim().split("\n").map(l=>l.split(",").map(c=>c.trim().replace(/^"|"$/g,"")));if(!ls.length)return"";let o="# "+file.name+"\n\n";const h=ls[0];const w=h.map((x,ci)=>Math.max(String(x).length,...ls.slice(1).map(r=>String(r[ci]??"").length),3));o+="| "+h.map((x,i)=>String(x).padEnd(w[i])).join(" | ")+" |\n";o+="| "+w.map(x=>"-".repeat(x)).join(" | ")+" |\n";ls.slice(1).forEach(r=>{o+="| "+h.map((_,i)=>String(r[i]??"").padEnd(w[i])).join(" | ")+" |\n";});o+="\n> \u5171 "+(ls.length-1)+" \u7b46\u8cc7\u6599\n\n";return o;}
 async function parseTXT(file){return"# "+file.name+"\n\n"+(await file.text());}
+
 function formatOutput(res,fmt){
-  if(fmt==="json")return JSON.stringify(res.map(r=>({filename:r.filename,content:r.content,char_count:r.content.length})),null,2);
-  if(fmt==="plain")return res.map(r=>"=== "+r.filename+" ===\n\n"+r.content.replace(/[#*|]/g,"").replace(/\n{3,}/g,"\n\n")+"\n\n").join("---\n\n");
-  return"> \u8f49\u63db\u6642\u9593\uff1a"+new Date().toLocaleString("zh-TW")+"  \n> \u6a94\u6848\u6578\uff1a"+res.length+"\n\n---\n\n"+res.map(r=>r.content).join("\n\n---\n\n");
+  if(fmt==="json") return JSON.stringify(res.map(r=>({filename:r.filename,content:r.content,char_count:r.content.length})),null,2);
+  if(fmt==="plain") return res.map(r=>"=== "+r.filename+" ===\n\n"+r.content.replace(/[#*|]/g,"").replace(/\n{3,}/g,"\n\n")+"\n\n").join("---\n\n");
+  return "> \u8f49\u63db\u6642\u9593\uff1a"+new Date().toLocaleString("zh-TW")+"  \n> \u6a94\u6848\u6578\uff1a"+res.length+"\n\n---\n\n"+res.map(r=>r.content).join("\n\n---\n\n");
 }
-async function convertFile(file,idx){
-  const ext=file.name.split(".").pop().toLowerCase();
-  setProgress(idx,30);
-  if(ext==="pdf")return parsePDF(file,idx);
-  if(ext==="docx")return parseWord(file,idx);
-  if(ext==="xlsx"||ext==="xls")return parseExcel(file,idx);
-  if(ext==="csv")return parseCSV(file);
-  if(ext==="txt")return parseTXT(file);
-  throw new Error("\u4e0d\u652f\u63f4\u7684\u683c\u5f0f\uff1a."+ext);
-}
-async function convertAll(){
-  const btn=document.getElementById("convertBtn");
-  btn.disabled=true;btn.textContent="\u8f49\u63db\u4e2d...";
-  const fmt=document.getElementById("outputFormat").value;
-  const res=[];
-  for(let i=0;i<files.length;i++){
-    setStatus(i,"processing","\u8655\u7406\u4e2d");setProgress(i,10);
-    try{const t=await convertFile(files[i],i);setStatus(i,"done","\u5b8c\u6210");setProgress(i,100);res.push({filename:files[i].name,content:t});}
-    catch(e){setStatus(i,"error","\u932f\u8aa4");res.push({filename:files[i].name,content:"[\u932f\u8aa4\uff1a"+e.message+"]"});}
+
+async function convertAll() {
+  const btn = document.getElementById("convertBtn");
+  btn.disabled = true; btn.textContent = "\u8f49\u63db\u4e2d...";
+  const fmt = document.getElementById("outputFormat").value;
+  const res = [];
+  for (let i=0; i<files.length; i++) {
+    setStatus(i,"processing","\u8655\u7406\u4e2d"); setProgress(i,10);
+    try {
+      const t = await convertFile(files[i], i);
+      setStatus(i,"done","\u5b8c\u6210"); setProgress(i,100);
+      res.push({filename:files[i].name, content:t});
+    } catch(e) {
+      setStatus(i,"error","\u932f\u8aa4");
+      res.push({filename:files[i].name, content:"[\u932f\u8aa4\uff1a"+e.message+"]"});
+    }
   }
-  const out=formatOutput(res,fmt);
-  const area=document.getElementById("outputArea");
-  area.value=out;
+  const out = formatOutput(res, fmt);
+  const area = document.getElementById("outputArea");
+  area.value = out;
   document.getElementById("outputSection").classList.add("visible");
-  updateStats(out,files.length);
-  btn.disabled=false;btn.textContent="\u958b\u59cb\u8f49\u63db";
+  updateStats(out, files.length);
+  btn.disabled=false; btn.textContent="\u958b\u59cb\u8f49\u63db";
   showToast("\u8f49\u63db\u5b8c\u6210\uff01","success");
   area.scrollIntoView({behavior:"smooth",block:"start"});
 }
+
+async function copyOutput() { const t=document.getElementById("outputArea").value; if(!t)return; await navigator.clipboard.writeText(t); const b=document.getElementById("copyBtn"); b.textContent="\u2713 \u5df2\u8907\u88fd"; b.classList.add("copied"); setTimeout(()=>{b.textContent="\u8907\u88fd\u5168\u90e8";b.classList.remove("copied");},2000); }
 </script>
 </body>
 </html>
