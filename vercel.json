@@ -1,14 +1,7 @@
 {
   "functions": {
     "api/convert.py": {
-      "runtime": "python3.12",
       "maxDuration": 30
     }
-  },
-  "rewrites": [
-    {
-      "source": "/api/convert",
-      "destination": "/api/convert"
-    }
-  ]
+  }
 }
